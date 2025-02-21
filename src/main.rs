@@ -1,6 +1,4 @@
-use std::alloc::Layout;
-
-use bevy::{color::palettes::css::BLACK, math::AspectRatio, prelude::*, window::{WindowRef, WindowResized}};
+use bevy::{color::palettes::css::BLACK, prelude::*, window::WindowResized};
 
 #[derive(Resource)]
 struct BoardDimension(f32);
@@ -32,7 +30,6 @@ struct BoardPieceTransform  {
 #[derive(Event)]
 struct EventBoardDimensionsChanged {
     dimension: f32,
-    node: Node,
 }
 
 pub struct TicTacToe;
@@ -61,32 +58,15 @@ fn on_window_resize(
     mut resize_events: EventReader<WindowResized>, 
     mut event_writer: EventWriter<EventBoardDimensionsChanged>,
     mut main_board_node: Query<&mut Node, With<MainBoardNode>>,
-    // mut board_borders_x: Query<(Entity, &mut Node), (With<BoardVerticalBorder>, Without<MainBoardNode>)>,
-    // mut board_borders_y: Query<(Entity, &mut Node), (With<BoardHorizontalBorder>, Without<MainBoardNode>)>,
-    //mut squares_params_set: Query<&mut Node,With<BoardPieceNode>>,
 ) {
     if let Some(event) = resize_events.read().last() {
         let dim = f32::min(event.width, event.height);
         if let Some(mut board) = main_board_node.iter_mut().next() {
-            println!("board dim changed, {}", dim);
             board.width = Val::Px(dim);
             board.height = Val::Px(dim);
-            event_writer.send(EventBoardDimensionsChanged { dimension: dim, node: board.to_owned() });
+            event_writer.send(EventBoardDimensionsChanged { dimension: dim });
         }
     }
-        // let mut node_updates = Vec::new();
-        // for (board_piece, entity) in squares_params_set.p0().iter() {
-        //     let square_transform = get_square_transform(dim, board_piece.0, board_piece.1);
-        //     node_updates.push((entity, square_transform));
-        // }
-        // for (entity, square_transform) in node_updates {
-        //     if let Ok(mut node) = squares_params_set.p1().get_mut(entity) {
-        //         node.width = Val::Px(square_transform.width);
-        //         node.height = Val::Px(square_transform.height);
-        //         node.left = Val::Px(square_transform.x);
-        //         node.right = Val::Px(square_transform.y);
-        //     }
-        // }
 }
 
 fn on_board_dimension_change_boarders_x(
@@ -142,9 +122,8 @@ fn mutate_board_dimension(dimension: f32, mut res_board_dimension: ResMut<BoardD
     res_board_dimension.0 = dimension;
 }
 
-fn find_board_dimension(mut windows: Query<&mut Window>, mut board_dimension: ResMut<BoardDimension>) {
+fn find_board_dimension(mut windows: Query<&mut Window>, board_dimension: ResMut<BoardDimension>) {
     if let Some(window) = windows.iter_mut().next() {
-        println!("Window dimensions: {}x{}", window.width(), window.height());
         mutate_board_dimension(f32::min(window.width(), window.height()), board_dimension);
     }
 }
@@ -220,8 +199,9 @@ fn setup_board(
     board_dimension: Res<BoardDimension>,
 ) {
     commands.spawn(Camera2d);
+
     let board_dim = board_dimension.0;
-    let mut main_board_node = commands.spawn((
+    let main_board_node = commands.spawn((
             MainBoardNode,
             Node {
                 width: Val::Px(board_dim),
@@ -232,10 +212,12 @@ fn setup_board(
             BackgroundColor(BG_COLOR),
     ));
     let main_board_node_id = main_board_node.id();
+
     for i in 1..=2 {
         let position_factor = get_board_border_position_factor(board_dim, i);
         let board_border_vertical_width = get_board_border_width(board_dim);
         let board_border_horizontal_height = get_board_border_height(board_dim);
+        
         commands.spawn((
             BoardVerticalBorder(i),
             Node {
@@ -247,6 +229,7 @@ fn setup_board(
             },
             BackgroundColor(BG_LINES),
         ));
+
         commands.spawn((
             BoardHorizontalBorder(i),
             Node {
