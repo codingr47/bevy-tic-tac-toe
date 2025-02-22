@@ -20,6 +20,9 @@ struct BoardVerticalBorder(i32);
 #[derive(Component)]
 struct BoardHorizontalBorder(i32);
 
+#[derive(Component)]
+struct Hoverable;
+
 struct BoardPieceTransform  {
     width: f32,
     height: f32,
@@ -27,10 +30,13 @@ struct BoardPieceTransform  {
     y: f32,
 }
 
+
+
 #[derive(Event)]
 struct EventBoardDimensionsChanged {
     dimension: f32,
 }
+
 
 pub struct TicTacToe;
 
@@ -51,6 +57,7 @@ impl Plugin for TicTacToe {
             on_board_dimension_change_boarders_y,
             on_board_dimension_change_squares,
         ))
+        .add_systems(Update, detect_mouse_hover_board_pieces)
         .add_event::<EventBoardDimensionsChanged>();
     }
 }
@@ -118,6 +125,27 @@ fn on_board_dimension_change_squares(
     }
 }
 
+fn detect_mouse_hover_board_pieces(
+    mut query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Hoverable>)>,
+) {
+    for (interaction, mut color) in query.iter_mut() {
+        match *interaction {
+            Interaction::Hovered => {
+                println!("Mouse entered the UI element!");
+                //*color = Color::GREEN.into(); // Change color on hover
+            }
+            Interaction::None => {
+                println!("Mouse left the UI element!");
+                //*color = Color::BLUE.into(); // Reset color
+            }
+            Interaction::Pressed => {
+                println!("UI element clicked!");
+                //*color = Color::RED.into(); // Change color on click
+            }
+        }
+    }
+}
+
 fn mutate_board_dimension(dimension: f32, mut res_board_dimension: ResMut<BoardDimension>) {
     res_board_dimension.0 = dimension;
 }
@@ -165,6 +193,8 @@ fn setup_pieces(
                             left: Val::Px(board_piece_transform.x),
                             ..default()
                         },
+                        Hoverable,
+                        Interaction::default(),
                         BackgroundColor(PURPLE), 
                         BorderColor(Color::from(BLACK)),
                     ));
