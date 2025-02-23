@@ -1,4 +1,6 @@
-use bevy::{color::palettes::css::BLACK, prelude::*, window::WindowResized};
+use bevy::{color::palettes::css::BLACK, prelude::*, window::WindowResized, winit::cursor::CursorIcon};
+use bevy::prelude::*;
+use bevy::window::{SystemCursorIcon};
 
 #[derive(Resource)]
 struct BoardDimension(f32);
@@ -37,6 +39,9 @@ struct EventBoardDimensionsChanged {
     dimension: f32,
 }
 
+#[derive(Resource)]
+struct CursorIcons(Vec<CursorIcon>);
+
 
 pub struct TicTacToe;
 
@@ -50,7 +55,7 @@ impl Plugin for TicTacToe {
     fn build(&self, app: &mut App) {
         app
         .insert_resource(BoardDimension(0.0))
-        .add_systems(Startup, (find_board_dimension, setup_board, setup_pieces).chain())
+        .add_systems(Startup, (init_cursor_icons, find_board_dimension, setup_board, setup_pieces).chain())
         .add_systems(Update, on_window_resize)
         .add_systems(Update, (
             on_board_dimension_change_boarders_x, 
@@ -126,24 +131,30 @@ fn on_board_dimension_change_squares(
 }
 
 fn detect_mouse_hover_board_pieces(
+    mut commands: Commands,
+    window: Single<Entity, With<Window>>,
     mut query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Hoverable>)>,
+    cursor_icons: Res<CursorIcons>,
 ) {
-    for (interaction, mut color) in query.iter_mut() {
-        match *interaction {
-            Interaction::Hovered => {
-                println!("Mouse entered the UI element!");
-                //*color = Color::GREEN.into(); // Change color on hover
+        for (interaction, mut color) in query.iter_mut() {
+            match *interaction {
+                Interaction::Hovered => {
+                    println!("Mouse entered the UI element!");
+                    commands
+                    .entity(*window)
+                    .insert(cursor_icons.0[1].clone());
+                }
+                Interaction::None => {
+                    println!("Mouse left the UI element!");
+                    commands
+                    .entity(*window)
+                    .insert(cursor_icons.0[0].clone());
+                }
+                Interaction::Pressed => {
+                    println!("UI element clicked!");
+                }
             }
-            Interaction::None => {
-                println!("Mouse left the UI element!");
-                //*color = Color::BLUE.into(); // Reset color
-            }
-            Interaction::Pressed => {
-                println!("UI element clicked!");
-                //*color = Color::RED.into(); // Change color on click
-            }
-        }
-    }
+        }   
 }
 
 fn mutate_board_dimension(dimension: f32, mut res_board_dimension: ResMut<BoardDimension>) {
@@ -171,7 +182,18 @@ fn get_square_transform(board_dimension: f32, x: i32, y: i32) -> BoardPieceTrans
         y: top,
     };
 }
- 
+
+
+fn init_cursor_icons(
+    mut commands: Commands,
+) {
+    commands.insert_resource(CursorIcons(vec![
+        SystemCursorIcon::Default.into(),
+        SystemCursorIcon::Pointer.into(),
+    ]));
+}
+
+
 fn setup_pieces(
     mut commands: Commands,
     board_query: Option<Res<MainBoardContainerEntity>>,
