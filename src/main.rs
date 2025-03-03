@@ -28,11 +28,15 @@ struct BoardHorizontalBorder(i32);
 struct Hoverable;
 
 
-#[derive(AsBindGroup, Debug, Clone, Asset, TypePath)]
+#[derive(AsBindGroup, Debug, Clone, Asset, TypePath, Component)]
 pub struct UIMaterialBrick {
     #[texture(0)]
     #[sampler(1)]
     pub texture: Handle<Image>,
+
+    #[uniform(2)]
+    pub time: f32,
+
 }
 
 #[derive(States, Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
@@ -72,6 +76,13 @@ struct TileColorTexture {
 }
 
 
+#[derive(Resource)]
+struct CurrentTileMaterialHandler {
+    is_active: bool,
+    handler: Handle<UIMaterialBrick>,
+    time_started: f32,
+}
+
 pub struct TicTacToe;
 
 const BG_COLOR: Color = Color::srgba(0.40, 0.01, 0.2, 0.15);
@@ -86,9 +97,11 @@ impl Plugin for TicTacToe {
         .add_plugins(UiMaterialPlugin::<UIMaterialBrick>::default())
         .init_state::<GameState>()
         .insert_resource(BoardDimension(0.0))
-        .add_systems(Startup, load_textures)
+        .insert_resource(CurrentTileMaterialHandler { handler: Handle::default(), is_active: false, time_started: 0.0 })
+        .add_systems(Startup, (init_cursor_icons, load_textures))
         .add_systems(Update, check_if_textures_loaded.run_if(in_state(GameState::Loading)))
-        .add_systems(OnEnter(GameState::Ready), (init_cursor_icons, find_board_dimension, setup_board, setup_pieces).chain())
+        
+        .add_systems(OnEnter(GameState::Ready), (find_board_dimension, setup_board, setup_pieces).chain())
         .add_systems(Update, on_window_resize)
         .add_systems(Update, (
             on_board_dimension_change_boarders_x, 
@@ -96,6 +109,7 @@ impl Plugin for TicTacToe {
             on_board_dimension_change_squares,
         ))
         .add_systems(Update, detect_mouse_hover_board_pieces.run_if(in_state(GameState::Ready)))
+        .add_systems(Update, update_tile_shader.run_if(in_state(GameState::Ready)))
         .add_event::<EventBoardDimensionsChanged>();
     }
 }
@@ -116,7 +130,6 @@ fn check_if_textures_loaded(
     images: Res<Assets<Image>>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
-    println!("Checking for tile color load.....");
     if images.get(&tile_texture.texture).is_some() {
         println!("Loaded tile color texture successfully !");
         next_state.set(GameState::Ready);
@@ -189,29 +202,57 @@ fn on_board_dimension_change_squares(
 
 fn detect_mouse_hover_board_pieces(
     mut commands: Commands,
+    now: Res<Time>,
     window: Single<Entity, With<Window>>,
-    mut query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Hoverable>)>,
+    mut query: Query<(&Interaction, &mut MaterialNode::<UIMaterialBrick>), (Changed<Interaction>, With<Hoverable>)>,
     cursor_icons: Res<CursorIcons>,
+    mut current_tile_material_handler: ResMut<CurrentTileMaterialHandler>,
+    mut materials: ResMut<Assets<UIMaterialBrick>>,
 ) {
-        for (interaction, mut color) in query.iter_mut() {
-            match *interaction {
-                Interaction::Hovered => {
-                    println!("Mouse entered the UI element!");
-                    commands
-                    .entity(*window)
-                    .insert(cursor_icons.0[1].clone());
-                }
-                Interaction::None => {
-                    println!("Mouse left the UI element!");
-                    commands
-                    .entity(*window)
-                    .insert(cursor_icons.0[0].clone());
-                }
-                Interaction::Pressed => {
-                    println!("UI element clicked!");
+        for (interaction, material_node) in query.iter_mut() {
+            println!("Interaction: {:?}", interaction);
+            if let Some(material) = materials.get_mut(&material_node.0) {
+                println!("itsy bitsty");
+                match *interaction {
+                    Interaction::Hovered => {
+                        println!("Mouse entered the UI element!");
+                        commands
+                        .entity(*window)
+                        .insert(cursor_icons.0[1].clone());
+                        
+                        current_tile_material_handler.handler = material_node.0.clone_weak();
+                        current_tile_material_handler.time_started = now.elapsed_secs();
+                        current_tile_material_handler.is_active = true; 
+                    }
+                    Interaction::None => {
+                        println!("Mouse left the UI element!");
+                        commands
+                        .entity(*window)
+                        .insert(cursor_icons.0[0].clone());
+                        material.time = 0.0;
+                        current_tile_material_handler.is_active = false;
+                    }
+                    Interaction::Pressed => {
+                        println!("UI element clicked!");      
+                    }
                 }
             }
         }   
+}
+
+fn update_tile_shader( 
+    mut current_tile_material: ResMut<CurrentTileMaterialHandler>,
+    mut materials: ResMut<Assets<UIMaterialBrick>>,
+    time: Res<Time>,
+) {
+    if current_tile_material.is_active {
+        if let Some(material) = materials.get_mut(&current_tile_material.handler) {
+            println!("active !!!!!, {}", time.elapsed_secs());
+            material.time = time.elapsed_secs() - current_tile_material.time_started;
+        }
+    }
+
+    
 }
 
 fn mutate_board_dimension(dimension: f32, mut res_board_dimension: ResMut<BoardDimension>) {
@@ -267,9 +308,10 @@ fn setup_pieces(
                     let board_piece_transform = get_square_transform(board_dimension.0, i, j);
                     let material_handle = ui_materials.add(UIMaterialBrick {
                         texture: tile_texture_handle.texture.clone(),
+                        time: 0.0,
                     });
                     parent.spawn((
-                        MaterialNode(material_handle),
+                        MaterialNode::<UIMaterialBrick>(material_handle),
                         Node {
                             width: Val::Px(board_piece_transform.width),
                             height: Val::Px(board_piece_transform.height),
@@ -279,9 +321,11 @@ fn setup_pieces(
                             left: Val::Px(board_piece_transform.x),
                             ..default()
                         },
+                        GlobalZIndex(100),
                         BoardPieceNode(i, j),
                         Hoverable,
                         BorderColor(Color::from(BLACK)),
+                        Interaction::None,
                     ));
                     
                 }
