@@ -216,7 +216,7 @@ fn detect_mouse_hover_board_pieces(
                         commands
                         .entity(*window)
                         .insert(cursor_icons.0[1].clone());
-                        
+                            
                         current_tile_material_handler.handler = material_node.0.clone_weak();
                         if !current_tile_material_handler.is_active  {
                             current_tile_material_handler.time_started = now.elapsed_secs();
