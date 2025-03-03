@@ -210,22 +210,20 @@ fn detect_mouse_hover_board_pieces(
     mut materials: ResMut<Assets<UIMaterialBrick>>,
 ) {
         for (interaction, material_node) in query.iter_mut() {
-            println!("Interaction: {:?}", interaction);
             if let Some(material) = materials.get_mut(&material_node.0) {
-                println!("itsy bitsty");
                 match *interaction {
                     Interaction::Hovered => {
-                        println!("Mouse entered the UI element!");
                         commands
                         .entity(*window)
                         .insert(cursor_icons.0[1].clone());
                         
                         current_tile_material_handler.handler = material_node.0.clone_weak();
-                        current_tile_material_handler.time_started = now.elapsed_secs();
+                        if !current_tile_material_handler.is_active  {
+                            current_tile_material_handler.time_started = now.elapsed_secs();
+                        }
                         current_tile_material_handler.is_active = true; 
                     }
                     Interaction::None => {
-                        println!("Mouse left the UI element!");
                         commands
                         .entity(*window)
                         .insert(cursor_icons.0[0].clone());
